@@ -1,0 +1,238 @@
+import pandas as pd
+
+# Define the spreadsheet data
+data = [
+    {
+        "Section": "Part 1",
+        "Description": "HTML structure, splash screen, and main menu setup.",
+        "Code": """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sky Hopper 2 Deluxe</title>
+<style>
+  body { margin: 0; background: #111; font-family: monospace; color: white; text-align: center; }
+  canvas { background: #222; display: block; margin: 0 auto; }
+  .menu, .splash, .hud { display: none; }
+  .visible { display: block; }
+  button { background: #444; color: white; border: none; padding: 10px 20px; margin: 8px; border-radius: 8px; cursor: pointer; }
+  button:hover { background: #666; }
+</style>
+</head>
+<body>
+<div id="splash" class="splash visible">
+  <h1>🎮 Sky Hopper 2 Deluxe 🎮</h1>
+  <p>Click or press any key to start</p>
+</div>
+<div id="menu" class="menu">
+  <h2>Main Menu</h2>
+  <button onclick="startGame()">Start Game</button>
+  <button onclick="openSkins()">Change Skin</button>
+  <button onclick="openLevels()">Change Level</button>
+  <button onclick="toggleDev()">Developer Mode</button>
+</div>
+<div id="hud" class="hud">
+  <h2 id="score">Score: 0</h2>
+</div>
+<canvas id="game" width="480" height="720"></canvas>
+<script>
+"""
+    },
+    {
+        "Section": "Part 2",
+        "Description": "Core gameplay engine, physics, drawing, and player controls.",
+        "Code": """// =================== GAME ENGINE ===================
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+let gameState = "splash";
+let score = 0;
+let best = 0;
+let gravity = 0.35;
+let flap = -6.5;
+let pipes = [];
+let frame = 0;
+let player = { x: 100, y: 250, vy: 0, size: 24, skin: "default" };
+let bg = "forest";
+let devMode = false;
+
+// Handle splash to menu
+window.addEventListener("keydown", startSplash);
+window.addEventListener("click", startSplash);
+function startSplash() {
+  document.getElementById("splash").classList.add("hidden");
+  document.getElementById("menu").classList.remove("hidden");
+  gameState = "menu";
+  window.removeEventListener("keydown", startSplash);
+  window.removeEventListener("click", startSplash);
+}
+
+// Game loop
+function loop() {
+  if (gameState === "play") updateGame();
+  drawGame();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+function startGame() {
+  document.getElementById("menu").classList.add("hidden");
+  document.getElementById("hud").classList.remove("hidden");
+  score = 0;
+  pipes = [];
+  player.y = 250;
+  player.vy = 0;
+  gameState = "play";
+}
+
+function toggleDev() {
+  devMode = !devMode;
+  alert("Developer Mode: " + (devMode ? "ON" : "OFF"));
+}
+
+function updateGame() {
+  frame++;
+  player.vy += gravity;
+  player.y += player.vy;
+
+  if (frame % 100 === 0) {
+    const top = Math.random() * 200 + 100;
+    pipes.push({ x: 500, top: top, gap: 140 });
+  }
+
+  pipes.forEach(p => p.x -= 3);
+  pipes = pipes.filter(p => p.x > -60);
+
+  for (let p of pipes) {
+    if (
+      player.x + player.size > p.x && player.x < p.x + 60 &&
+      (player.y < p.top || player.y + player.size > p.top + p.gap)
+    ) {
+      endGame();
+      return;
+    }
+    if (p.x + 60 === player.x) score++;
+  }
+
+  if (player.y + player.size > canvas.height || player.y < 0) {
+    endGame();
+  }
+}
+
+window.addEventListener("keydown", e => {
+  if (e.code === "Space" || e.code === "ArrowUp") player.vy = flap;
+});
+window.addEventListener("click", () => {
+  if (gameState === "play") player.vy = flap;
+});
+
+function endGame() {
+  best = Math.max(best, score);
+  gameState = "menu";
+  document.getElementById("menu").classList.remove("hidden");
+  document.getElementById("hud").classList.add("hidden");
+  alert("Game Over! Score: " + score + " | Best: " + best);
+}
+
+function drawGame() {
+  let grad = ctx.createLinearGradient(0,0,0,720);
+  if (bg === "forest") { grad.addColorStop(0,"#4caf50"); grad.addColorStop(1,"#2e7d32"); }
+  else if (bg === "city") { grad.addColorStop(0,"#607d8b"); grad.addColorStop(1,"#455a64"); }
+  else { grad.addColorStop(0,"#0d47a1"); grad.addColorStop(1,"#311b92"); }
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,480,720);
+
+  ctx.fillStyle = "#00baff";
+  for (let p of pipes) {
+    ctx.fillRect(p.x, 0, 60, p.top);
+    ctx.fillRect(p.x, p.top + p.gap, 60, 720);
+  }
+
+  ctx.fillStyle = player.skin === "default" ? "#ff0" :
+                  player.skin === "blue" ? "#33f" :
+                  player.skin === "red" ? "#f33" :
+                  player.skin === "messi" ? "#0ff" :
+                  "#aaa";
+  ctx.fillRect(player.x, player.y, player.size, player.size);
+
+  if (gameState === "play") {
+    document.getElementById("score").textContent = "Score: " + score;
+  }
+}
+"""
+    },
+    {
+        "Section": "Part 3",
+        "Description": "Skin unlocks, level selection, save system, and finishing tags.",
+        "Code": """// =================== SAVE SYSTEM & SKINS ===================
+const STORAGE_KEY = "SkyHopper2_SaveData_v1";
+
+function loadSave() {
+  try {
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (data) {
+      best = data.best || 0;
+      player.skin = data.skin || "default";
+      bg = data.bg || "forest";
+    }
+  } catch(e) { console.warn("No save data."); }
+}
+function saveProgress() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    best, skin: player.skin, bg
+  }));
+}
+
+function openSkins() {
+  const s = prompt(
+    "Choose Skin: default / blue / red / messi / robot\\n(Current: " + player.skin + ")"
+  );
+  if (!s) return;
+  const allowed = ["default","blue","red","messi","robot"];
+  if (allowed.includes(s.toLowerCase())) {
+    player.skin = s.toLowerCase();
+    saveProgress();
+    alert("Skin changed to " + s + "!"); }
+  else alert("Invalid skin name.");
+}
+
+function openLevels() {
+  const l = prompt(
+    "Choose Level: forest / city / space\\n(Current: " + bg + ")"
+  );
+  if (!l) return;
+  const allowed = ["forest","city","space"];
+  if (allowed.includes(l.toLowerCase())) {
+    bg = l.toLowerCase();
+    saveProgress();
+    alert("Level changed to " + l + "!");
+  } else alert("Invalid level name.");
+}
+
+(function addExtraButtons(){
+  const m = document.getElementById("menu");
+  const btn1 = document.createElement("button");
+  btn1.textContent = "Change Skin";
+  btn1.onclick = openSkins;
+  m.insertBefore(btn1, m.children[1]);
+  const btn2 = document.createElement("button");
+  btn2.textContent = "Change Level";
+  btn2.onclick = openLevels;
+  m.insertBefore(btn2, m.children[2]);
+})();
+
+loadSave();
+window.addEventListener("beforeunload", saveProgress);
+</script>
+</body>
+</html>
+"""
+    }
+]
+
+# Create DataFrame and save to Excel
+df = pd.DataFrame(data)
+file_path = "/mnt/data/Sky_Hopper_2_Deluxe_Code.xlsx"
+df.to_excel(file_path, index=False)
+
+file_path
